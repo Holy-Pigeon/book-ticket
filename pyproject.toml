@@ -11,6 +11,7 @@ dependencies = ["cryptography>=43"]
 
 [project.scripts]
 book-ticket-pkuszh = "projects.pkuszh.__main__:main"
+book-ticket-tennis = "projects.dachanbay_tennis.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["common*", "projects*"]

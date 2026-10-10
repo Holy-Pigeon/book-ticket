@@ -32,3 +32,5 @@ venv/
 build/
 dist/
 *.zip
+payment-trace-*.json
+attempts.json

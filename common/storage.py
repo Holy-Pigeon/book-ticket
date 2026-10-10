@@ -43,8 +43,18 @@ def project_data_dir(project):
 
 
 def write_json(path, value):
-    path = Path(path)
     raw = protect(json.dumps(value, ensure_ascii=False).encode('utf-8'))
+    _write_bytes(path, raw)
+
+
+def write_plain_json(path, value):
+    """Atomic UTF-8 JSON for already sanitized diagnostics, never credentials."""
+    raw = json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')
+    _write_bytes(path, raw)
+
+
+def _write_bytes(path, raw):
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

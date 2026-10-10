@@ -10,7 +10,7 @@ common/
   errors.py         # 可向用户展示的错误类型
 projects/
   pkuszh/           # 北京大学深圳医院牙体牙髓科
-  dachanbay_tennis/  # 网球预约预留目录，尚未接入
+  dachanbay_tennis/  # 昀湾网球接口预约和支付诊断
 tests/
 ```
 
@@ -32,6 +32,16 @@ py -3 -m venv .venv
 先采集本人登录态，恢复代理并移除临时证书，再初始化偏好。捐赠选择必须本人阅读当前告知后明确填写；仓库没有预设同意。守候窗口点击开始后会在出现合适号源时自动提交一次预约，不自动付款。详见 [医院项目说明](projects/pkuszh/README.md)。
 
 默认运行数据目录是 `%LOCALAPPDATA%\book-ticket\pkuszh`。可设置 `BOOK_TICKET_DATA_DIR` 指定数据根目录，项目名会自动追加。仓库只包含源代码、公开配置字段名和合成测试数据；不包含 Cookie、Token、就诊人资料、证书、HAR 或历史订单。
+
+网球项目使用独立的 `%LOCALAPPDATA%\book-ticket\dachanbay_tennis` 数据目录：
+
+```powershell
+python -m projects.dachanbay_tennis watch
+python -m projects.dachanbay_tennis query
+python -m projects.dachanbay_tennis capture-payment
+```
+
+接口助手打开后需本人采集登录态、阅读须知并开启预约；付款由本人完成。详见[网球项目说明](projects/dachanbay_tennis/README.md)。
 
 ## 验证
 

@@ -10,10 +10,13 @@ def main(argv=None):
                         help="watch/capture 打开接口助手；query 只读查询；capture-payment 支付采集")
     args = parser.parse_args(argv)
     try:
+        if args.command != "query":
+            from common.desktop import require_tk
+            require_tk()
         if args.command in ("watch", "capture"):
             from .assistant import main as run
         elif args.command == "query":
-            from .assistant import probe as run
+            from .query import probe as run
         else:
             from .payment_capture import main as run
         run()

@@ -1,6 +1,7 @@
 import datetime as dt
 from decimal import Decimal, InvalidOperation
-import os
+from common.desktop import show_proxy_settings
+from common.platforms import proxy_instructions
 import queue
 import threading
 import tkinter as tk
@@ -33,16 +34,17 @@ class App:
                   font=("Microsoft YaHei UI", 12, "bold")).pack(anchor="w", pady=(0, 10))
         capture = ttk.LabelFrame(box, text="1. 获取本机登录凭证", padding=10)
         capture.pack(fill="x")
-        instructions = ("点击启动代理 → 打开 Windows 代理设置，先记下原设置 → 临时使用手动代理\n"
+        instructions = ("点击启动代理 → 打开 系统代理设置，先记下原设置 → 临时使用手动代理\n"
                         "地址 127.0.0.1，端口 8766 → 在电脑微信重新打开 HTTP 预约链接并点网球场\n"
-                        "显示获取成功后，先恢复 Windows 原代理设置，再点停止代理。无需安装证书。")
-        ttk.Label(capture, text=instructions, justify="left").pack(anchor="w")
+                        "显示获取成功后，先恢复 系统原代理设置，再点停止代理。无需安装证书。")
+        instructions += "\n" + proxy_instructions(8766)
+        ttk.Label(capture, text=instructions, justify="left", wraplength=850).pack(anchor="w")
         row = ttk.Frame(capture)
         row.pack(fill="x", pady=(8, 0))
         ttk.Button(row, text="启动本机代理", command=self.start_proxy).pack(side="left")
-        ttk.Button(row, text="打开 Windows 代理设置", command=lambda: os.startfile("ms-settings:network-proxy")).pack(side="left", padx=8)
+        ttk.Button(row, text="打开 系统代理设置", command=show_proxy_settings).pack(side="left", padx=8)
         ttk.Button(row, text="已恢复原设置，停止代理", command=self.stop_proxy).pack(side="left")
-        ttk.Label(capture, text="凭证仅加密保存在此电脑当前 Windows 账户下。不要把 Token 发到聊天或截图中。",
+        ttk.Label(capture, text="凭证仅加密保存在此电脑当前系统账户下。不要把 Token 发到聊天或截图中。",
                   foreground="#555555").pack(anchor="w", pady=(8, 0))
         manual = ttk.Frame(capture)
         manual.pack(fill="x", pady=(6, 0))
@@ -113,7 +115,7 @@ class App:
             try:
                 save_credentials(value)
                 self.captured = True
-                self.emit("登录凭证已加密保存。请先恢复 Windows 原代理设置，再点停止代理。")
+                self.emit("登录凭证已加密保存。请先恢复 系统原代理设置，再点停止代理。")
             except Exception:
                 self.emit("本机凭证保存失败；未记录凭证内容。")
 
@@ -154,7 +156,7 @@ class App:
 
     def start_job(self, mode):
         if self.proxy:
-            messagebox.showinfo("提示", "请先恢复 Windows 原代理设置并停止本机代理。")
+            messagebox.showinfo("提示", "请先恢复 系统原代理设置并停止本机代理。")
             return
         if self.busy:
             messagebox.showinfo("提示", "已有任务在运行，请先停止或等待完成。")
@@ -292,7 +294,7 @@ class App:
 
     def close(self):
         if self.proxy:
-            if not messagebox.askyesno("先恢复代理设置", "请先恢复 Windows 原代理设置，否则关闭后可能无法上网。\n已恢复并退出？"):
+            if not messagebox.askyesno("先恢复代理设置", "请先恢复 系统原代理设置，否则关闭后可能无法上网。\n已恢复并退出？"):
                 return
             self.proxy.stop()
         if self.busy:
@@ -301,20 +303,6 @@ class App:
             return
         self.root.destroy()
 
-
-def probe():
-    api = Api(load_credentials())
-    profile = api.profile()
-    court = api.tennis()
-    type_id = court["ground_type_id"]
-    print("login_ok=True; direct_booking_allowed=" + str(profile.get("require_verification") == 1))
-    print("dates=" + ",".join(str(x["date"]) for x in api.dates(type_id)))
-    print("notices_received=" + str(bool(api.notices(type_id))))
-    for target in target_dates(api.dates(type_id)):
-        slots = choices(api.grid(type_id, target[0]), target)
-        print("target=" + " ".join(target) + "; matched=" + str(len(slots)) +
-              "; available=" + str(sum(s.get("status") == 1 for s in slots)))
-    print("order_query_ok=True; count=" + str(len(api.orders())))
 
 
 def main():

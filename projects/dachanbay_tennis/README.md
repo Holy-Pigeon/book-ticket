@@ -1,11 +1,11 @@
 # 昀湾文体中心网球预约
 
-Windows 本机运行。默认目标为周二 21:00–22:00、周三 19:00–20:00，任意网球场。
-通过接口自动提交预约，付款由本人完成。项目使用 Python 标准库和 Tkinter。
+Windows / macOS 本机运行，安装步骤见仓库根目录 README。默认目标为周二 21:00–22:00、周三 19:00–20:00，任意网球场。
+通过接口自动提交预约，付款由本人完成。项目复用公共加密、进程互斥和系统适配层，图形界面使用 Tkinter。
 
 ## 运行
 
-仓库根目录执行，或双击本目录 `launch.cmd`：
+仓库根目录执行，或双击本目录 `launch.cmd`（Windows）/ `launch.command`（macOS），优先使用仓库 `.venv`：
 
 ```powershell
 python -m projects.dachanbay_tennis watch
@@ -19,10 +19,13 @@ python -m projects.dachanbay_tennis capture-payment
 ## 登录与预约
 
 1. 电脑微信登录场馆，访问 `http://spc.dachanbay.tencent.com/index`。
-2. 点“启动本机代理”，记下 Windows 原代理设置，临时把手动代理设为 `127.0.0.1:8766`。
+2. 点“启动本机代理”，记下 系统原代理设置，临时把手动代理设为 `127.0.0.1:8766`。
 3. 微信重新进入网球预约页并切换日期，等待“登录凭证已加密保存”。无需安装证书。
-4. **先恢复 Windows 原代理设置，再停止本机代理。**
+4. **先恢复 系统原代理设置，再停止本机代理。**
 5. 点“验证登录并查询”，阅读实时须知、设置单次价格上限并勾选同意，再选择立即预约或每天 20:00 守候。
+
+macOS 在“系统设置 → 网络 → 当前连接 → 详细信息 → 代理”中启用 HTTP 网页代理，设置服务器和端口并应用；结束前恢复原设置。
+macOS 微信是否采用系统代理需实机核对；如未捕获请求，可使用窗口的本地 Token 输入，不要发送凭证给他人。
 
 每日北京时间 20:00–20:03，每次响应后间隔 5 秒查询，当天成功提交一次后等待次日。
 保持程序运行、联网、电脑不休眠。实际可预约日期由接口决定，日期可见不代表资源已放出。
@@ -36,10 +39,13 @@ python -m projects.dachanbay_tennis capture-payment
 
 ```text
 %LOCALAPPDATA%\book-ticket\dachanbay_tennis\
-  credentials.dpapi       # 当前 Windows 用户 DPAPI 加密凭证
+  credentials.dpapi       # 本机加密凭证（DPAPI / 钥匙串密钥 + Fernet）
   attempts.dpapi          # 加密的下单尝试记录
   payment-trace-*.json    # 已脱敏支付诊断
 ```
+
+macOS 默认目录为 `~/Library/Application Support/book-ticket/dachanbay_tennis`，文件名相同。
+首次保存可能请求钥匙串授权，失败时停止；`.dpapi` 为兼容保留的文件名。
 
 `BOOK_TICKET_DATA_DIR` 可更换数据根目录，项目名自动追加，与医院项目数据分开。
 本次只迁入源码，没有复制旧版 `local_data` 或修改原运行实例。仓库版首次使用需要重新采集凭证；
@@ -48,9 +54,9 @@ python -m projects.dachanbay_tennis capture-payment
 
 ## 一次性支付诊断
 
-运行 `capture-payment` 或双击 `capture-payment.cmd`，先停止预约任务及原代理。
-开始采集后临时设置相同本机代理，在电脑微信完成本人原本计划的付款，再返回订单详情。
-先恢复 Windows 原设置，再结束采集。工具只转发本人请求，不创建订单或重放付款请求。
+运行 `capture-payment`，或在 macOS 终端执行 `./projects/dachanbay_tennis/launch.command capture-payment`，Windows 也可双击 `capture-payment.cmd`，先停止预约任务及原代理。
+开始采集后临时设置相同本机代理（macOS 需同时启用 HTTP 和 HTTPS，HTTPS 仍不解密），在电脑微信完成本人原本计划的付款，再返回订单详情。
+先恢复 系统原设置，再结束采集。工具只转发本人请求，不创建订单或重放付款请求。
 
 仅记录场馆支付相关 JSON 的脱敏结构、状态和金额；凭证、签名、openid 和个人信息不落盘，
 订单号替换为本次采集内一致的匿名标识。正文最多 256 KiB、数组最多 2 个样本、总计最多 500 个事件。
@@ -60,6 +66,6 @@ HTTPS 仅转发，支付服务只记录域名、时间和流量大小，不解�
 ## 验证范围
 
 `tests/dachanbay_tennis/` 使用合成接口及回环 HTTP 服务，不访问场馆、不操作真实桌面、不付款。
-覆盖下单前落盘、未知结果不重试、预约条件、重复订单、代理转发、DPAPI 及诊断脱敏。
+覆盖下单前落盘、未知结果不重试、预约条件、重复订单、代理转发、两系统的加密存储及诊断脱敏；macOS 钥匙串默认使用合成替身。
 旧独立版本已验证真实登录、日期、场地、须知和订单查询；用户手动测试确认下单返回支付参数，
 后续收银台曾提示交易安全风险。仓库迁移版只完成离线集成验证，真实预约及支付完整流程尚未验收。

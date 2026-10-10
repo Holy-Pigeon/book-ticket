@@ -1,3 +1,4 @@
+from tests.support import private_storage_test
 import datetime as dt
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -74,7 +75,7 @@ class Tests(unittest.TestCase):
         with self.assertRaises(BookingError):
             duplicate([dict(date=TARGET[0])], TARGET)
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows encrypted booking journal')
+    @private_storage_test
     def test_write_ahead_exact_body_and_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = Journal(Path(tmp)/'attempts.json')
@@ -89,7 +90,7 @@ class Tests(unittest.TestCase):
                 submit(api, Journal(journal.path), 'tennis', TARGET, choices(GRID,TARGET)[0], 6000, threading.Event())
             self.assertEqual(sum(x[0]=='PayBooking' for x in api.calls),1)
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows encrypted booking journal')
+    @private_storage_test
     def test_ambiguous_result_not_retried(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = Journal(Path(tmp)/'attempts.json')
@@ -118,7 +119,7 @@ class Tests(unittest.TestCase):
             path = Path(tmp)/'attempts.json'; path.write_text('bad')
             with self.assertRaises(BookingError): Journal(path)
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_dpapi_roundtrip_no_plaintext(self):
         raw = b'LOCAL-FAKE-TOKEN-ONLY-FOR-TEST'
         encrypted = protect(raw)

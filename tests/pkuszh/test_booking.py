@@ -1,3 +1,4 @@
+from tests.support import private_storage_test
 import contextlib
 import json
 from pathlib import Path
@@ -119,7 +120,7 @@ class BookingTests(unittest.TestCase):
         b.prepare = lambda doc, row: {'startTime': '09:00', 'endTime': '09:30'}
         return b
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_ambiguous_submission_never_replayed(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)), \
                 patch.object(booking, 'Mutex', contextlib.nullcontext):
@@ -135,7 +136,7 @@ class BookingTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(booking.read_private('booking-journal.dpapi')['state'], 'unknown')
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_success_single_submission_and_encrypted_journal(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)), \
                 patch.object(booking, 'Mutex', contextlib.nullcontext):

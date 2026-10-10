@@ -7,7 +7,7 @@ name = "book-ticket"
 version = "0.1.0"
 description = "Shared local booking tools and independent project integrations"
 requires-python = ">=3.10"
-dependencies = ["cryptography>=43"]
+dependencies = ["cryptography>=43", "keyring>=25; sys_platform == 'darwin'"]
 
 [project.scripts]
 book-ticket-pkuszh = "projects.pkuszh.__main__:main"

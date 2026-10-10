@@ -7,7 +7,6 @@ from pathlib import Path
 import select
 import socket
 import ssl
-import subprocess
 import tempfile
 import threading
 from urllib.parse import urlsplit
@@ -16,6 +15,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+from common.platforms import UserCertificateTrust, restrict_private_directory
 from . import core
 
 PORT = 8767
@@ -34,6 +34,8 @@ class Certificate:
                 .public_key(root_key.public_key()).serial_number(x509.random_serial_number())
                 .not_valid_before(now - dt.timedelta(minutes=5)).not_valid_after(self.expiry)
                 .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+                .add_extension(x509.SubjectKeyIdentifier.from_public_key(root_key.public_key()), critical=False)
+                .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(root_key.public_key()), critical=False)
                 .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
                 .sign(root_key, hashes.SHA256()))
         leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -43,6 +45,8 @@ class Certificate:
                 .serial_number(x509.random_serial_number())
                 .not_valid_before(now - dt.timedelta(minutes=5)).not_valid_after(self.expiry)
                 .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+                .add_extension(x509.SubjectKeyIdentifier.from_public_key(leaf_key.public_key()), critical=False)
+                .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(root_key.public_key()), critical=False)
                 .add_extension(x509.SubjectAlternativeName([x509.DNSName(core.HOST)]), critical=False)
                 .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
                 .sign(root_key, hashes.SHA256()))
@@ -56,41 +60,27 @@ class Certificate:
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.context.minimum_version = ssl.TLSVersion.TLSv1_2
         self.context.set_alpn_protocols(['http/1.1'])
-        # Restrict the temporary key directory to this Windows user before writing a key.
+        # Restrict the temporary directory before writing the short-lived leaf key.
         with tempfile.TemporaryDirectory(prefix='hospital-capture-') as directory:
-            script = ('$p=$args[0];$sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User;'
-                      '$acl=Get-Acl -LiteralPath $p;$acl.SetAccessRuleProtection($true,$false);'
-                      '$rule=New-Object System.Security.AccessControl.FileSystemAccessRule('
-                      '$sid,"FullControl","ContainerInherit,ObjectInherit","None","Allow");'
-                      '$acl.AddAccessRule($rule);Set-Acl -LiteralPath $p -AclObject $acl')
-            args = ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
-                    '& { param($target) ' + script.replace('$p=$args[0];', '$p=$target;') + ' }', directory]
-            completed = subprocess.run(args, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            if completed.returncode:
-                raise core.LocalError('无法限制临时私钥目录的访问权限，未生成采集工具。')
+            restrict_private_directory(directory)
             cert_path, key_path = Path(directory) / 'leaf.pem', Path(directory) / 'key.pem'
             cert_path.write_bytes(leaf.public_bytes(serialization.Encoding.PEM) + root.public_bytes(serialization.Encoding.PEM))
             key_path.write_bytes(leaf_key.private_bytes(serialization.Encoding.PEM,
                                  serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
             self.context.load_cert_chain(cert_path, key_path)
         del leaf_key
-        self.installed = False
+        self.trust = UserCertificateTrust(self.path, self.thumbprint, core.HOST)
+
+    @property
+    def installed(self):
+        return self.trust.installed
 
     def install(self):
         # Called only after an explicit user action and a trust-scope confirmation.
-        r = subprocess.run(['certutil.exe', '-user', '-addstore', 'Root', str(self.path)],
-                           capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        if r.returncode:
-            raise core.LocalError('临时根证书未安装成功，采集未启动。')
-        self.installed = True
+        self.trust.install()
 
     def remove(self):
-        if self.installed:
-            r = subprocess.run(['certutil.exe', '-user', '-delstore', 'Root', self.thumbprint],
-                               capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            if r.returncode:
-                raise core.LocalError('证书自动移除失败。请在 certmgr.msc 的受信任根证书中按窗口指纹移除此证书。')
-            self.installed = False
+        self.trust.remove()
         self.path.unlink(missing_ok=True)
 
 

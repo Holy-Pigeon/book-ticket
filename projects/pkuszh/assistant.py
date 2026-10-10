@@ -1,6 +1,8 @@
 """User-run local HAR import and read-only query UI."""
 import threading
-import subprocess
+from common.desktop import show_proxy_settings
+from common.platforms import certificate_scope, proxy_instructions
+from common.storage import write_plain_json
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 from . import core
@@ -25,12 +27,13 @@ class App:
                         '④ 在电脑微信返回科室入口，重新进入牙体牙髓科，选择全部日期。无需下单。\n'
                         '⑤ 出现“已加密保存”后，先恢复原代理，再点“结束采集并移除证书”，最后单次查询。\n'
                         '仅解析 mp.mhealth100.com；其他 HTTPS 连接原样透传。不会记录其他医疗请求的内容。')
+        instructions += '\n' + proxy_instructions(capture.PORT, https=True)
         tk.Label(root, text=instructions, justify='left', anchor='w', wraplength=910).pack(fill='x', padx=18)
         bar = tk.Frame(root)
         bar.pack(fill='x', padx=18, pady=16)
         tk.Button(bar, text='① 生成临时证书（不安装）', command=lambda: self.run(self.prepare)).pack(side='left', padx=(0, 10))
         tk.Button(bar, text='② 安装并开始采集', command=self.start_capture).pack(side='left', padx=(0, 10))
-        tk.Button(bar, text='打开 Windows 代理设置', command=self.proxy_settings).pack(side='left', padx=(0, 10))
+        tk.Button(bar, text='打开系统代理设置', command=self.proxy_settings).pack(side='left', padx=(0, 10))
         tk.Button(bar, text='⑤ 结束采集并移除证书', command=self.stop_capture).pack(side='left')
         bar = tk.Frame(root)
         bar.pack(fill='x', padx=18, pady=(0, 16))
@@ -46,12 +49,11 @@ class App:
         if self.certificate:
             return self.certificate_info()
         self.certificate = capture.Certificate()
-        import json
-        (core.DATA / 'certificate-info.json').write_text(json.dumps({
+        write_plain_json(core.DATA / 'certificate-info.json', {
             'name': 'Local Hospital Capture - Temporary 24h',
             'sha1': self.certificate.thumbprint, 'sha256': self.certificate.sha256,
             'expires_utc': self.certificate.expiry.isoformat()
-        }), encoding='utf-8')
+        })
         return self.certificate_info()
 
     def certificate_info(self):
@@ -60,7 +62,7 @@ class App:
                 '证书名称：Local Hospital Capture - Temporary 24h\n'
                 f'到期时间（UTC）：{c.expiry:%Y-%m-%d %H:%M}\n'
                 f'SHA-1 指纹（移除时定位）：{c.thumbprint}\nSHA-256：{c.sha256}\n'
-                '信任范围：当前 Windows 用户的根证书存储；这是账户级信任变更。\n'
+                f'信任范围：{certificate_scope(core.HOST)}。\n'
                 '采集程序仅为 mp.mhealth100.com 使用证书，不保存根签名私钥。')
 
     def start_capture(self):
@@ -70,7 +72,7 @@ class App:
             messagebox.showinfo('先生成证书', '请先生成临时证书并核对名称、期限及指纹。')
             return
         consent = messagebox.askyesno('确认临时根证书信任',
-            '为读取你本人的微信挂号请求，需要把此临时根证书安装到当前 Windows 用户的受信任根存储。\n\n'
+            f'为读取你本人的微信挂号请求，需要把此临时根证书安装到{certificate_scope(core.HOST)}。\n\n'
             '根证书信任是账户级变更；程序只解析 mp.mhealth100.com，其他 HTTPS 原样透传。'
             '只保存牙体牙髓科排班 GET 的登录态，不保存其他医疗请求内容。\n\n'
             '证书有效期 24 小时，结束采集时按指纹移除。根签名私钥不保存。\n'
@@ -106,14 +108,13 @@ class App:
             '检测到连接或转发失败。如微信报证书错误，请先恢复原代理并结束采集，不要忽略微信的安全提示。'))
 
     def proxy_settings(self):
-        subprocess.Popen(['cmd.exe', '/c', 'start', '', 'ms-settings:network-proxy'],
-                         creationflags=subprocess.CREATE_NO_WINDOW)
+        show_proxy_settings()
 
     def stop_capture(self):
         if self.busy:
             return
         if self.proxy and not messagebox.askyesno('先恢复原代理',
-                '停止代理后仍指向 127.0.0.1:8767 会导致联网失败。你已恢复原 Windows 代理设置了吗？'):
+                '停止代理后仍指向 127.0.0.1:8767 会导致联网失败。你已恢复原系统代理设置了吗？'):
             return
         self.run(self.cleanup)
 
@@ -131,7 +132,7 @@ class App:
             messagebox.showinfo('正在处理', '请等本次操作结束后关闭。')
             return
         if self.proxy and not messagebox.askyesno('关闭前恢复代理',
-                '请先恢复原 Windows 代理设置。确认已恢复并停止采集、移除证书、关闭窗口？'):
+                '请先恢复原系统代理设置。确认已恢复并停止采集、移除证书、关闭窗口？'):
             return
         try:
             self.cleanup()

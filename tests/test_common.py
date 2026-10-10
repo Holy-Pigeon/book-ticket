@@ -1,3 +1,4 @@
+from tests.support import private_storage_test
 import math
 import json
 import os
@@ -38,7 +39,7 @@ class CommonTests(unittest.TestCase):
             for name in ['..', '../outside', 'a\\b', '']:
                 with self.assertRaises(ValueError): project_data_dir(name)
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_private_storage_and_failed_replace_preserve_previous_record(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'nested' / 'record.dpapi'
@@ -51,7 +52,6 @@ class CommonTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), before)
             self.assertEqual(list(path.parent.iterdir()), [path])
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows mutex')
     def test_instance_lock_blocks_duplicates_and_releases(self):
         name = 'test-' + uuid.uuid4().hex
         with SingleInstance(name):

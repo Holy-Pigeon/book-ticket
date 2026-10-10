@@ -1,3 +1,4 @@
+from tests.support import private_storage_test
 import copy
 import importlib.util
 import json
@@ -6,6 +7,7 @@ import socket
 import ssl
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from urllib.parse import urlencode
@@ -64,7 +66,7 @@ class Tests(unittest.TestCase):
         with self.assertRaises(core.LocalError):
             core.select_request(f)
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_dpapi_roundtrip_and_no_plaintext_file(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)):
             value = core.select_request(fixture())
@@ -94,7 +96,41 @@ class Tests(unittest.TestCase):
                 core.get_json('/gateway/registration/appointment/order/create', {})
             conn.assert_not_called()
 
-    @unittest.skipUnless(os.name == 'nt' and os.environ.get('BOOK_TICKET_LIVE_TESTS') == '1', 'Explicit opt-in live TLS check')
+    def test_local_tls_certificate_without_trust_install_or_external_network(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)):
+            certificate = capture.Certificate()
+            self.assertFalse(certificate.installed)
+            self.assertEqual([p.suffix for p in Path(tmp).iterdir()], ['.cer'])
+            context = ssl.create_default_context()
+            context.load_verify_locations(cadata=ssl.DER_cert_to_PEM_cert(certificate.path.read_bytes()))
+            client_socket, server_socket = socket.socketpair()
+            errors = []
+            def serve():
+                try:
+                    with certificate.context.wrap_socket(server_socket, server_side=True) as tls:
+                        tls.settimeout(5)
+                        self.assertEqual(tls.recv(4), b'TEST')
+                        tls.sendall(b'OK')
+                except Exception as error:
+                    errors.append(error)
+            worker = threading.Thread(target=serve, daemon=True)
+            worker.start()
+            try:
+                client_socket.settimeout(5)
+                with context.wrap_socket(client_socket, server_hostname=core.HOST) as tls:
+                    tls.sendall(b'TEST')
+                    self.assertEqual(tls.recv(2), b'OK')
+                    self.assertIn(('DNS', core.HOST), tls.getpeercert()['subjectAltName'])
+            finally:
+                client_socket.close()
+                server_socket.close()
+                worker.join(timeout=6)
+                certificate.remove()
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(errors, [])
+            self.assertFalse(certificate.path.exists())
+
+    @unittest.skipUnless(os.environ.get('BOOK_TICKET_LIVE_TESTS') == '1', 'Explicit opt-in live TLS check')
     def test_certificate_and_live_tls_forward_no_trust_install(self):
         # Public GET only. Root is trusted solely inside this test's SSLContext.
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)):

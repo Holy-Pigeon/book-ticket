@@ -1,3 +1,4 @@
+from tests.support import private_storage_test
 from pathlib import Path
 import tempfile
 import unittest
@@ -27,7 +28,7 @@ class FakeApi:
 
 
 class ConfigureTests(unittest.TestCase):
-    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
+    @private_storage_test
     def test_fresh_local_configuration_preserves_explicit_refusal(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, 'DATA', Path(tmp)), patch('projects.pkuszh.configure.Api', FakeApi):
             shown = []

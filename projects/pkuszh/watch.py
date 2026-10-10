@@ -4,8 +4,6 @@ import sys
 import threading
 import time
 from common.polling import backoff
-import tkinter as tk
-from tkinter import scrolledtext
 from . import core
 from .api import TZ, BusinessError, RateLimitError, TransientRequestError
 from .booking import Booker, available
@@ -40,6 +38,8 @@ def preflight_retry_delay(error, failures):
 
 class Watch:
     def __init__(self, root):
+        import tkinter as tk
+        from tkinter import scrolledtext
         core.DATA.mkdir(parents=True, exist_ok=True)
         self.root, self.thread = root, None
         self.stop = threading.Event()
@@ -166,6 +166,9 @@ class Watch:
 
 
 def main():
+    from common.desktop import require_tk
+    require_tk()
+    import tkinter as tk
     root = tk.Tk()
     watch = Watch(root)
     if '--start' in sys.argv:

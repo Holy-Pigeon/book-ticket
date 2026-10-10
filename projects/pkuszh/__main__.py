@@ -13,6 +13,9 @@ def main():
     sub.add_parser('watch', help='打开守候窗口，点击开始后自动提交一次，不付款')
     args = parser.parse_args()
     try:
+        if args.command in {"capture", "watch"}:
+            from common.desktop import require_tk
+            require_tk()
         if args.command == 'capture':
             from .assistant import main as capture_main
             capture_main()

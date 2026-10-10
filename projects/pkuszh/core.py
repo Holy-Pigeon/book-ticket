@@ -1,11 +1,10 @@
 """Import an own-account HAR locally and replay only verified read endpoints."""
 import http.client
 import json
-import os
 from pathlib import Path
 import ssl
 from common.errors import LocalError
-from common.storage import protect, project_data_dir
+from common.storage import read_json, write_json, project_data_dir
 from urllib.parse import parse_qs, unquote, urlsplit
 
 HOST = 'mp.mhealth100.com'
@@ -82,7 +81,7 @@ def import_har(path):
     except Exception:
         raise LocalError('HAR 无法解析，未保存。') from None
     save_session(value)
-    return '已在当前 Windows 账户下加密保存排班请求的登录态。未保存 HAR 内的其他请求或响应。'
+    return '已在当前系统账户下加密保存排班请求的登录态。未保存 HAR 内的其他请求或响应。'
 
 
 def save_session(value):
@@ -91,18 +90,12 @@ def save_session(value):
         raise LocalError('请求头不在允许范围内。')
     if any('\r' in str(v) or '\n' in str(v) for v in value['headers'].values()):
         raise LocalError('请求头格式异常。')
-    DATA.mkdir(parents=True, exist_ok=True)
-    tmp = DATA / 'session.tmp'
-    with tmp.open('wb') as f:
-        f.write(protect(json.dumps(value).encode('utf-8')))
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, DATA / 'session.dpapi')
+    write_json(DATA / 'session.dpapi', value)
 
 
 def load_session():
     try:
-        value = json.loads(protect((DATA / 'session.dpapi').read_bytes(), True))
+        value = read_json(DATA / 'session.dpapi')
         validate_url(value['url'])
         if set(value['headers']) - ALLOWED_HEADERS:
             raise ValueError()

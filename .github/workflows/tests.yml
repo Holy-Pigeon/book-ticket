@@ -1,0 +1,33 @@
+name: Cross-platform tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python: ['3.10', '3.13']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - run: python -m unittest discover -s tests -v
+        env:
+          BOOK_TICKET_KEYCHAIN_TESTS: ${{ runner.os == 'macOS' && '1' || '0' }}
+      - name: CLI entry points
+        run: |
+          book-ticket-pkuszh --help
+          book-ticket-tennis --help
+      - name: macOS launcher syntax
+        if: runner.os == 'macOS'
+        run: |
+          sh -n projects/pkuszh/launch.command
+          sh -n projects/dachanbay_tennis/launch.command
+          projects/pkuszh/launch.command --help
+          projects/dachanbay_tennis/launch.command --help

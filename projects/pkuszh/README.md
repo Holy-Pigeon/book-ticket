@@ -15,16 +15,20 @@
 
 ## 首次使用
 
+Windows / macOS 均可运行，安装步骤见仓库根目录 README。macOS 使用 `.venv/bin/python`，Windows 使用 `.venv\Scripts\python.exe`。
+
 在仓库根目录安装依赖后运行 `python -m projects.pkuszh capture`。
 
-1. 窗口生成临时证书，核对名称、期限、指纹。点击安装后仍需确认当前 Windows 用户的临时根信任。
-2. 记下原 Windows 代理，临时设置 `127.0.0.1:8767`。
+1. 窗口生成临时证书，核对名称、期限、指纹。点击安装后仍需确认当前系统用户的临时根信任；macOS 还可能弹出系统授权窗口。
+2. 记下原系统代理，临时设置 `127.0.0.1:8767`。
 3. 在电脑微信正常登录，进入牙体牙髓科并选择全部日期，无需挂号。
 4. 显示已加密保存后，先恢复原代理，再结束采集并移除证书。
 5. 运行 `python -m projects.pkuszh configure`，阅读当前告知并明确选择捐赠意愿、医保/自费和费用上限。
 6. 运行 `python -m projects.pkuszh query` 验证只读查询，再用 `python -m projects.pkuszh watch` 打开守候窗口。
 
-临时根信任是账户级变更。采集仅解析 `mp.mhealth100.com`，其他 HTTPS 原样透传；根签名私钥不保存，叶私钥临时受本用户 ACL 限制并在加载后删除。异常退出时需恢复代理，并在 `certmgr.msc` 按指纹移除该证书。到期不等于移除。
+Windows 安装到当前用户的受信任根证书；macOS 安装到登录钥匙串，限制为 SSL 和目标主机。采集仅解析 `mp.mhealth100.com`，其他 HTTPS 原样透传；根签名私钥不保存，叶私钥在当前用户专用临时目录中生成（Windows ACL / macOS 0700），加载后删除。异常退出时需恢复代理，并在 Windows `certmgr.msc` 或 macOS“钥匙串访问 → 登录”按窗口指纹移除该证书。到期不等于移除。
+
+macOS 采集需在当前网络连接的代理中同时启用 HTTP 和 HTTPS，均指向 `127.0.0.1:8767` 并应用；结束前恢复两项原设置。不接受用户证书的微信版本可改用本人浏览器导出的目标科室 HAR 本地导入；不关闭 TLS 校验。
 
 ## 预约流程
 
@@ -40,6 +44,6 @@
 
 ## 本机数据与测试边界
 
-不复制他人的本机数据。运行数据默认保存在 `%LOCALAPPDATA%\book-ticket\pkuszh`，使用当前 Windows 用户 DPAPI 加密，不能跨 Windows 用户直接使用。状态日志只记医生、时间及错误类别。不要提交运行目录、HAR、证书、就诊人信息或账号凭证。
+不复制他人的本机数据。Windows 默认目录为 `%LOCALAPPDATA%\book-ticket\pkuszh`，使用当前用户 DPAPI；macOS 为 `~/Library/Application Support/book-ticket/pkuszh`，使用钥匙串保存密钥的 Fernet 加密。不能跨系统或账户直接使用加密文件，换系统需重新采集与配置并核对已有订单。状态日志只记医生、时间及错误类别。不要提交运行目录、HAR、证书、就诊人信息或账号凭证。
 
 默认测试使用合成资料和离线协议向量。代码迁移后的真实医保状态读取、告知和下单全流程仍需有效登录态与真实余号验证；尚不声称真实挂号成功。

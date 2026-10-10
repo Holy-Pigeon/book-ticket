@@ -1,9 +1,11 @@
 """Run from the repository root: python -m projects.dachanbay_tennis [command]."""
 import argparse
+from common.cli import configure_output
 from common.errors import LocalError
 
 
 def main(argv=None):
+    configure_output()
     parser = argparse.ArgumentParser(description="昀湾网球预约助手：自动提交预约，手动付款")
     parser.add_argument("command", nargs="?", default="watch",
                         choices=("watch", "capture", "query", "capture-payment"),

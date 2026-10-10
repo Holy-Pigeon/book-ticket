@@ -2,6 +2,9 @@ name: Cross-platform tests
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   offline:
     strategy:
@@ -17,6 +20,14 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e .
+      - name: Isolated unlocked test Keychain
+        if: runner.os == 'macOS'
+        run: |
+          security create-keychain -p synthetic-ci-only "$RUNNER_TEMP/book-ticket-tests.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/book-ticket-tests.keychain-db"
+          security unlock-keychain -p synthetic-ci-only "$RUNNER_TEMP/book-ticket-tests.keychain-db"
+          security default-keychain -d user -s "$RUNNER_TEMP/book-ticket-tests.keychain-db"
+          security list-keychains -d user -s "$RUNNER_TEMP/book-ticket-tests.keychain-db"
       - run: python -m unittest discover -s tests -v
         env:
           BOOK_TICKET_KEYCHAIN_TESTS: ${{ runner.os == 'macOS' && '1' || '0' }}
@@ -31,3 +42,6 @@ jobs:
           sh -n projects/dachanbay_tennis/launch.command
           projects/pkuszh/launch.command --help
           projects/dachanbay_tennis/launch.command --help
+      - name: Remove isolated test Keychain
+        if: always() && runner.os == 'macOS'
+        run: security delete-keychain "$RUNNER_TEMP/book-ticket-tests.keychain-db"

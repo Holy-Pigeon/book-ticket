@@ -1,8 +1,10 @@
 import argparse
+from common.cli import configure_output
 from . import core
 
 
 def main():
+    configure_output()
     parser = argparse.ArgumentParser(description='北大深圳医院牙体牙髓科预约助手（不自动付款）')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('capture', help='打开登录态采集窗口；安装证书仍需本人确认')

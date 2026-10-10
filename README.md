@@ -9,6 +9,7 @@ common/
   concurrency.py    # Windows 命名互斥 / macOS flock，进程退出自动释放
   platforms.py      # 代理设置入口、临时目录权限、当前用户证书信任
   desktop.py        # 图形模式的 Tk 检查与提示
+  cli.py            # 中文命令行输出编码
   polling.py        # 查询退避
   errors.py         # 用户可读错误
 projects/
@@ -94,7 +95,7 @@ python -m unittest discover -s tests -v
 默认测试使用合成数据和回环网络，不访问业务网站、不安装根信任、不下单。
 Windows 实测 DPAPI；两系统均测试 Fernet 加密及预约记录不重放，钥匙串访问使用内存替身。
 跨进程互斥及医院证书的本地 TLS 握手使用当前操作系统的真实实现。
-GitHub Actions 覆盖 Windows/macOS、Python 3.10/3.13，并在临时 macOS runner 上执行原生钥匙串检查。
+GitHub Actions 覆盖 Windows/macOS、Python 3.10/3.13，并在临时 macOS runner 的独立测试钥匙串中执行原生检查；不使用真实账户数据。
 
 macOS 原生钥匙串集成检查可显式设置 `BOOK_TICKET_KEYCHAIN_TESTS=1`，
 它创建并清理独立的合成测试密钥，可能弹出系统授权窗口。

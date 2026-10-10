@@ -15,6 +15,21 @@ from tests.support import MemoryKeychain
 
 
 class PlatformTests(unittest.TestCase):
+    def test_cli_help_and_missing_session_work_with_ascii_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ, PYTHONIOENCODING='ascii', BOOK_TICKET_DATA_DIR=directory)
+            for project in ['projects.pkuszh', 'projects.dachanbay_tennis']:
+                with self.subTest(project=project):
+                    result = subprocess.run([sys.executable, '-m', project, '--help'],
+                                            capture_output=True, env=environment, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', errors='replace'))
+                    self.assertIn('预约', result.stdout.decode('utf-8'))
+                    result = subprocess.run([sys.executable, '-m', project, 'query'],
+                                            capture_output=True, env=environment, timeout=10)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertNotIn(b'Traceback', result.stderr)
+                    self.assertIn('登录', result.stderr.decode('utf-8'))
+
     def test_native_data_roots(self):
         with patch.dict(os.environ, {'LOCALAPPDATA': 'local-test'}), \
                 patch('common.paths.system', return_value='windows'):

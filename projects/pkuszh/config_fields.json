@@ -1,0 +1,298 @@
+[
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "verification.code"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "checkIdCardNo.before.lockReg"
+  },
+  {
+    "dataType": "ONLINE_CREATE_CARD_FORM",
+    "mateName": "SHOW_REGIST_CHILDREN_FORM"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "idCard.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "phoneNum.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "homeAddress.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "gender.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "age.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "job.check"
+  },
+  {
+    "dataType": "healthCard.supplement",
+    "mateName": "nation.check"
+  },
+  {
+    "dataType": "HOSPITAL_HEALTHCARD_CONFIG",
+    "mateName": "myinfo.showcard.type"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "regfeeName"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "treatfeeName"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "op.regFee.plus.desc"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "op.regFee.add.desc"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "registration.use.yyfenshi"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "registered.fenshi.disease.content"
+  },
+  {
+    "dataType": "HOSPITAL_OTHER_CONFIG",
+    "mateName": "file.upload"
+  },
+  {
+    "dataType": "TIMES_INPUT_ITEMS",
+    "mateName": "times.input.items.description"
+  },
+  {
+    "dataType": "ALIPAY_ONLINE_MEDICARE_CONFIG",
+    "mateName": "online.medicare.cardurl"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "online.medicare.cardurl"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "online.medicare.change.paytype"
+  },
+  {
+    "dataType": "ALIPAY_ONLINE_MEDICARE_CONFIG",
+    "mateName": "online.medicare.change.paytype"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "get.reg.fee.fail.uncontinue"
+  },
+  {
+    "dataType": "HOSPITAL_HEALTHCARD_CONFIG",
+    "mateName": "bind.create.healthcard.identifyType"
+  },
+  {
+    "dataType": "IDENTIFY_TYPE_FORM",
+    "mateName": "identifyType"
+  },
+  {
+    "dataType": "HOSPITAL_HEALTHCARD_CONFIG",
+    "mateName": "healthCard.maxCount"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "open.registration.doctor.share"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "registration.note.countdown"
+  },
+  {
+    "dataType": "PAYMENT_ESHIMIN",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "WANDA_WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "weixin.insurance.cityId"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "weixin.insurance.cityId"
+  },
+  {
+    "dataType": "PAYMENT_GANZHOU_INSURANCE",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "BESPOKE_REPORT_SETTING_FORM",
+    "mateName": "bespoke.report.today.paynow"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "BESPOKE_REPORT"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "appoint_payment_delay"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "appointment.register.merge"
+  },
+  {
+    "dataType": "APPOINT_TODAY_SETTING_FORM",
+    "mateName": "insurance.today.reg.paynow"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "country.insurance.no.verify"
+  },
+  {
+    "dataType": "PAYMENT_ESHIMIN_MINI",
+    "mateName": "eshimin.pay.city_id"
+  },
+  {
+    "dataType": "PAYMENT_LIAONING_INSURANCE",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "PAYMENT_WEIXIN",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "PAYMENT_WEIXIN_SL",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "electronic.medical.insurance.voucher.switch"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "nucleicAcidTest.open.bill"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "registration.face.nuclear.body"
+  },
+  {
+    "dataType": "REGISTRATION_FACE_NUCLEAR_BODY_FORM",
+    "mateName": "weixin"
+  },
+  {
+    "dataType": "REGISTRATION_FACE_NUCLEAR_BODY_FORM",
+    "mateName": "alipay"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "appoint.waiting.switch"
+  },
+  {
+    "dataType": "ALTERNATE-SETTING",
+    "mateName": "registered_alternate_instructions"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "registration.patient.flow.verify"
+  },
+  {
+    "dataType": "TIMES_INPUT_ITEMS",
+    "mateName": "times.input.insurance.credit.pay"
+  },
+  {
+    "dataType": "ALTERNATE-SETTING",
+    "mateName": "waiting.pay.immediately"
+  },
+  {
+    "dataType": "PAYMENT_DAREWAY",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "PAYMENT_DAREWAY_ONLINE_MEDICARE_CONFIG",
+    "mateName": "electronic.medical.insurance.voucher.switch"
+  },
+  {
+    "dataType": "PAYMENT_NEUSOFT",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "PAYMENT_NEUSOFT_ONLINE_MEDICARE_CONFIG",
+    "mateName": "electronic.medical.insurance.voucher.switch"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "country.insurance.mode"
+  },
+  {
+    "dataType": "PAYMENT_PLUGIN",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "WEIXIN_ONLINE_MEDICARE_CONFIG",
+    "mateName": "insurance.tester.information"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "getSvObject.addRegDate"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "getSvObject.addScheduleId"
+  },
+  {
+    "dataType": "HOSPITAL_HEALTHCARD_CONFIG",
+    "mateName": "address_split"
+  },
+  {
+    "dataType": "PAYMENT_ALIPAY_MINI",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "ALIPAY_MINI_ONLINE_MEDICARE_CONFIG",
+    "mateName": "wechat_embeded_alipay_insurance_pay"
+  },
+  {
+    "dataType": "ALIPAY_MINI_ONLINE_MEDICARE_CONFIG",
+    "mateName": "registration_choise_time_url"
+  },
+  {
+    "dataType": "ALIPAY_MINI_ONLINE_MEDICARE_CONFIG",
+    "mateName": "appointment_choise_time_url"
+  },
+  {
+    "dataType": "TIMES_INPUT_ITEMS",
+    "mateName": "times.input.insurance.credit.pay.tips"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "accurate.appointment.enable"
+  },
+  {
+    "dataType": "ACCURATE_APPOINTMENT_FORM",
+    "mateName": "accurate.appointment.desc"
+  },
+  {
+    "dataType": "HOSPITAL_SYSTEM_CONFIG",
+    "mateName": "wechat.insurance.setting"
+  },
+  {
+    "dataType": "WECHAT_INSURANCE_SETTING",
+    "mateName": "payment.authorization"
+  },
+  {
+    "dataType": "PAYMENT_HY",
+    "mateName": "online.medicare.pay"
+  },
+  {
+    "dataType": "HOSPITAL_ORDER_CONFIG",
+    "mateName": "timeSharing.customAuthInfo"
+  }
+]

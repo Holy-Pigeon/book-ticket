@@ -1,0 +1,15 @@
+{
+  "payload": {
+    "deptId": "1032",
+    "doctorId": "TEST",
+    "scheduleId": "TEST",
+    "bindingId": "TEST",
+    "nonceStr": "123",
+    "timestamp": 42
+  },
+  "expected": {
+    "encrypted": "0zTIml15TzihZ8r0KlT7qWSFIbLMC90GbeS+6hyWOTJuaFQQXnNGzyiOJwa6iqYNri19I+pLxVBcmpoe7LkcvNF+CtZSdRWmdD4y7/Oa7Wr6yrpLMlrZ/bXLr0LrCV2ox23eJBPBS3vX0xVunXW45w==",
+    "sign": "bd210c4b8023776445152e8ddbe296ab431c14cadf6ffb88581b1b6657f639af"
+  },
+  "source": "Synthetic input evaluated by the published patient client CryptoJS; contains no account or patient data."
+}

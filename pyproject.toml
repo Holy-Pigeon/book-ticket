@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book-ticket"
+version = "0.1.0"
+description = "Shared local booking tools and independent project integrations"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=43"]
+
+[project.scripts]
+book-ticket-pkuszh = "projects.pkuszh.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["common*", "projects*"]
+
+[tool.setuptools.package-data]
+"projects.pkuszh" = ["config_fields.json"]

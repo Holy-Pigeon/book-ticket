@@ -141,25 +141,29 @@ class HandoffTests(unittest.TestCase):
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 (async()=>{
-for (const mode of ['paid','free','wrong-session']) {
+for (const mode of ['paid','free','wrong-session','renewed-session']) {
   const requests=[], calls=[], redirects=[];
-  const response={main_order_no:'synthetic-order',need_payment:mode==='paid',url_params:'synthetic-signed-value'};
-  const context={console,URLSearchParams,setTimeout,document:{body:{append(){}},createElement(){return {remove(){}}}},
+  let tick=0,reads=0;
+  const paid=mode==='paid'||mode==='renewed-session';
+  const response={main_order_no:'synthetic-order',need_payment:paid,url_params:'synthetic-signed-value'};
+  const context={console,URLSearchParams,Date:class extends Date {static now(){return tick}},
+    setTimeout(fn,delay){tick+=delay;fn()},document:{body:{append(){}},createElement(){return {remove(){}}}},
     window:{location:{assign(p){redirects.push(p)}}},
     fetch:async(url,options)=>{
       requests.push(url.split('/').pop());
+      if (options.headers['spc-jwt-token']==='synthetic-expired') return {ok:false,status:403};
       assert.equal(options.headers['spc-jwt-token'],'synthetic-jwt');
       if (mode==='wrong-session') return {ok:false,status:403};
       return {ok:true,status:200,json:async()=>({response,mp_openid:''})};
     },
-    sdk:{profile:()=>({getJwt:async(options)=>{assert.equal(options.autoRenew,false);return 'synthetic-jwt'}}),
+    sdk:{profile:()=>({getJwt:async(options)=>{assert.equal(options.autoRenew,false);reads++;return mode==='renewed-session'&&reads===1?'synthetic-expired':'synthetic-jwt'}}),
       user:()=>({setMpOpenid(value){assert.equal(value,'')}}),
       cashier:async(...args)=>{calls.push(args);assert.equal(args[0],response);assert.equal(args.length,4)}}};
   await new vm.Script('(async()=>{'+SOURCE+'})()').runInNewContext(context);
-  assert.equal(calls.length,mode==='paid'?1:0);
-  assert.deepEqual(requests,mode==='wrong-session'?['ready']:['ready','claim','launched']);
+  assert.equal(calls.length,paid?1:0);
+  assert.deepEqual(requests,mode==='wrong-session'?['ready']:mode==='renewed-session'?['ready','ready','claim','launched']:['ready','claim','launched']);
   assert.equal(redirects.length,0); // Only a REAL SDK success callback may redirect.
-  if (mode==='paid') {
+  if (paid) {
     calls[0][1].router.push({path:'/venue_success',query:{main_order_no:'synthetic-order'}});
     assert.equal(redirects[0],'/venue_success?main_order_no=synthetic-order');
   }
@@ -183,8 +187,8 @@ for (const mode of ['paid','free','wrong-session']) {
                 value = Proxy(callback, port=0, **kwargs)
                 holder['proxy'] = value
                 return value
-            def create(credentials,timeout):
-                value = original(credentials,timeout)
+            def create(credentials,timeout,**kwargs):
+                value = original(credentials,timeout,**kwargs)
                 holder['handoff'] = value
                 return value
             @contextlib.contextmanager
@@ -229,8 +233,9 @@ for (const mode of ['paid','free','wrong-session']) {
             with patch('common.system_proxy.proxy_session',side_effect=settings), \
                  patch.object(cashier,'Handoff',side_effect=create), \
                  patch('projects.dachanbay_tennis.capture_proxy.Proxy', side_effect=create_proxy), \
+                 patch.object(core,'Api',return_value=api), patch.object(core,'DATA',Path(tmp)), \
                  patch.object(cashier,'check_frontend'), patch.object(api,'venue',side_effect=guarded):
-                workflow.book_with_cashier(api,workflow.notice_digest(api.notices('tennis')),None,
+                workflow.book_with_cashier(None,workflow.notice_digest(api.notices('tennis')),None,
                                            journal=journal,show=show,now=NOW,timeout=10)
             holder['thread'].join(5)
             self.assertEqual(errors,[])
@@ -238,6 +243,24 @@ for (const mode of ['paid','free','wrong-session']) {
             self.assertEqual(events[-1],'proxy-restored')
             self.assertEqual(journal.records[journal.key(TARGET)]['cashier_state'],'sdk_requested')
             self.assertEqual(sum(x[0]=='PayBooking' for x in api.calls),1)
+            self.assertTrue((Path(tmp)/'credentials.dpapi').exists())
+
+    @private_storage_test
+    def test_fresh_session_requires_real_profile_validation_before_binding(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(core,'DATA',Path(tmp)):
+            handoff = cashier.Handoff(None,authorize=cashier.authorize_session)
+            url=urlsplit(f'http://{core.HOST}/__book_ticket/{handoff.nonce}/ready')
+            headers={'Origin':'http://'+core.HOST,'spc-jwt-token':'synthetic-fresh-token'}
+            with patch.object(core.Api,'profile',side_effect=core.BookingError('expired')):
+                self.assertEqual(handoff.handle('POST',url,headers,b'')[0],403)
+            self.assertIsNone(handoff.credentials)
+            self.assertFalse(handoff.ready.is_set())
+            self.assertFalse((Path(tmp)/'credentials.dpapi').exists())
+            with patch.object(core.Api,'profile',return_value={'require_verification':1}):
+                self.assertEqual(handoff.handle('POST',url,headers,b'')[0],200)
+            self.assertTrue(handoff.ready.is_set())
+            self.assertNotIn(b'synthetic-fresh-token',(Path(tmp)/'credentials.dpapi').read_bytes())
+            self.assertEqual(handoff.handle('POST',url,{**headers,'spc-jwt-token':'different-account'},b'')[0],403)
 
 
 class ReleaseTests(unittest.TestCase):

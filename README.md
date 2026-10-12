@@ -62,12 +62,13 @@ chmod +x projects/pkuszh/launch.command projects/dachanbay_tennis/launch.command
 
 网球：`watch` / `capture` 打开接口助手，采集登录态、查询并阅读实时须知后开启预约；
 `query` 只读查询；`capture-payment` 打开本人付款流程的脱敏诊断窗口。
+`daily` 使用已确认须知持续守候，19:45 准备微信页面，19:59:45 起串行查询新放号日期并交接官网收银台；最终付款由本人操作。
 目标为周二 21:00–22:00、周三 19:00–20:00。详见[网球项目说明](projects/dachanbay_tennis/README.md)。
 
 Windows 代理入口是“设置 → 网络和 Internet → 代理”。
 macOS 是“系统设置 → 网络 → 当前连接 → 详细信息 → 代理”；网球登录采集启用网页代理 HTTP，
 医院 HTTPS 采集启用 HTTP 和 HTTPS 两项。设置服务器 `127.0.0.1` 和窗口所示端口并应用。
-先记下原设置，采集结束前先恢复原设置；代理仅用于采集，后续接口请求直接联网。
+先记下原设置，采集结束前先恢复原设置；代理用于登录采集及网球收银台页面交接，业务 API 请求直接联网。
 macOS 微信是否采用系统代理及接受用户证书，仍需在实际微信版本中验证。
 
 ## 本机数据

@@ -5,11 +5,13 @@ import time
 
 class DeadlineStop:
     """Event-compatible stop view, including checks immediately before a POST."""
-    def __init__(self, event, deadline):
+    def __init__(self, event, deadline, abort=None):
         self.event, self.deadline = event, deadline
+        self.abort = abort
 
     def is_set(self):
-        return self.event.is_set() or time.monotonic() >= self.deadline
+        return (self.event.is_set() or time.monotonic() >= self.deadline
+                or (self.abort is not None and bool(self.abort())))
 
     def wait(self, seconds):
         if self.is_set():

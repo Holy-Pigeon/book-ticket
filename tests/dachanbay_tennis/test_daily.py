@@ -16,29 +16,26 @@ class DailyTests(unittest.TestCase):
         self.assertEqual(daily.next_preparation(now.replace(day=13,hour=20,minute=3)).day,14)
         self.assertEqual(daily.next_preparation(now.replace(day=14,hour=20,minute=3)).day,20)
 
-    def test_capture_then_book_once_and_stop_without_next_day_retry(self):
+    def test_fresh_browser_workflow_once_and_stop_without_next_day_retry(self):
         stop=threading.Event()
         events=[]
-        def capture(*args,**kwargs): events.append('capture')
         def book(*args,**kwargs):
             events.append('book')
+            self.assertIsNone(args[0])  # Login and cashier use the SAME page.
             self.assertEqual(args[1:3],('approved-synthetic-hash',None))
             self.assertTrue(kwargs['await_release'])
             stop.set()
-        with patch.object(daily,'capture_login',side_effect=capture), \
-             patch.object(daily,'book_with_cashier',side_effect=book), \
-             patch.object(core,'load_credentials',return_value={'token':'synthetic'}):
+        with patch.object(daily,'book_with_cashier',side_effect=book):
             daily.run_daily('approved-synthetic-hash',None,stop=stop,show=lambda s:None,
                             clock=lambda:dt.datetime(2026,10,13,19,45,tzinfo=core.TZ))
-        self.assertEqual(events,['capture','book'])
+        self.assertEqual(events,['book'])
 
-    def test_login_failure_never_proceeds_to_booking(self):
-        with patch.object(daily,'capture_login',side_effect=core.BookingError('expired')), \
-             patch.object(daily,'book_with_cashier') as book:
+    def test_failed_workflow_stops_without_second_attempt(self):
+        with patch.object(daily,'book_with_cashier',side_effect=core.BookingError('expired')) as book:
             with self.assertRaises(core.BookingError):
                 daily.run_daily('approved-synthetic-hash',None,show=lambda s:None,stop=threading.Event(),
                                 clock=lambda:dt.datetime(2026,10,13,19,45,tzinfo=core.TZ))
-            book.assert_not_called()
+            book.assert_called_once()
 
     def test_file_stop_and_deadline_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -53,3 +50,5 @@ class DailyTests(unittest.TestCase):
         with patch('common.polling.time.monotonic',return_value=11):
             self.assertTrue(bounded.is_set())
             self.assertTrue(bounded.wait(30))
+        with patch('common.polling.time.monotonic',return_value=1):
+            self.assertTrue(DeadlineStop(event,10,abort=lambda:True).is_set())

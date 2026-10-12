@@ -74,7 +74,7 @@ def main(argv=None):
                               show=lambda s: print(f'{dt.datetime.now(TZ):%Y-%m-%d %H:%M:%S}  {s}', flush=True))
                 elif args.command == 'check-cashier':
                     from .cashier import check_receiver
-                    check_receiver(Api(load_credentials()), timeout=args.timeout, manual=args.manual_proxy,
+                    check_receiver(timeout=args.timeout, manual=args.manual_proxy,
                                    service=args.network_service, show=lambda s:print(s,flush=True))
                 else:
                     api = Api(load_credentials())

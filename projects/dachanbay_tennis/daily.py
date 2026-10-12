@@ -4,7 +4,6 @@ import threading
 import time
 
 from . import core
-from .login_capture import capture_login
 from .workflow import book_with_cashier
 
 STOP_FILE = core.DATA / 'watch-stop.request'
@@ -57,16 +56,15 @@ def run_daily(approved_hash, cap_cents, *, release_days=7, manual=False, service
         while clock() < ready_at:
             if stop.wait(min(30, max(.01, (ready_at-clock()).total_seconds()))):
                 return
-        # Re-capture each release day even if yesterday's credential still works.
-        capture_login(300, manual, service, show, already_locked=True, stop=stop)
         if stop.is_set():
             return
         end = ready_at.replace(hour=20, minute=3)
         remaining = (end-clock()).total_seconds()
         if remaining <= 0:
             raise core.BookingError('登录准备已超过本次放号窗口，今日未下单。')
-        api = core.Api(core.load_credentials())
-        book_with_cashier(api, approved_hash, cap_cents, stop=stop, manual=manual,
+        # The one-time page validates and captures the current WeChat login,
+        # then stays open to receive the actual reservation/cashier response.
+        book_with_cashier(None, approved_hash, cap_cents, stop=stop, manual=manual,
                           service=service, show=show, timeout=int(remaining)+60,
                           await_release=True, release_days=release_days)
         # Prevent another attempt in the same release window, including no-stock.

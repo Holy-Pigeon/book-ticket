@@ -272,18 +272,7 @@ class App:
                 while dt.datetime.now(TZ) < ready_at:
                     if self.stop_event.wait(min(30, max(0.1, (ready_at-dt.datetime.now(TZ)).total_seconds()))):
                         return
-                try:
-                    api.profile()
-                except BookingError as error:
-                    if '登录已过期' not in str(error) or system() != 'windows':
-                        raise
-                    from .login_capture import capture_login
-                    self.emit('今晚登录态已过期，开始自动采集；请在微信重新打开预约网站并进入网球场。')
-                    capture_login(300, show=self.emit, already_locked=True, stop=self.stop_event)
-                    api = Api(load_credentials())
-                if api.notices(type_id) != approved:
-                    raise BookingError("实时须知已变化，守候已停止，请重新查询和同意。")
-                result = book_with_cashier(api, notice_digest(approved), cap, stop=self.stop_event,
+                result = book_with_cashier(None, notice_digest(approved), cap, stop=self.stop_event,
                                            show=self.emit, manual=system() == 'macos',
                                            restored=self.wait_proxy_restored, timeout=1200, await_release=True,
                                            release_days=self.release_days)

@@ -95,7 +95,7 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
     """Caller owns SingleInstance. Verify the receiving browser BEFORE the POST."""
     from common.system_proxy import proxy_session
     from .capture_proxy import Proxy
-    from .cashier import Handoff, check_frontend
+    from .cashier import Handoff, authorize_session, check_frontend
     journal = journal or core.Journal()
     stop = stop or threading.Event()
     if await_release:
@@ -105,16 +105,20 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
         if release_date.weekday() not in core.TARGETS:
             show(f'本次新放号日期 {release_date} 不在目标周二/周三，不查询或下单。')
             return None
-    plan = prepare(api, journal, now)
-    if plan['notice_hash'] != approved_hash:
-        raise core.BookingError('须知未确认或已变化，未下单。')
-    if not await_release and not any(not x['blocked'] and (cap_cents is None or x['slot']['price'] <= cap_cents) for x in plan['options']):
-        show('当前没有符合条件且未尝试过的目标时段，没有下单。')
-        return None
+    if api is not None:
+        plan = prepare(api, journal, now)
+        if plan['notice_hash'] != approved_hash:
+            raise core.BookingError('须知未确认或已变化，未下单。')
+        if not await_release and not any(not x['blocked'] and (cap_cents is None or x['slot']['price'] <= cap_cents) for x in plan['options']):
+            show('当前没有符合条件且未尝试过的目标时段，没有下单。')
+            return None
     check_frontend()
-    handoff = Handoff(api.credentials, timeout)
+    handoff = Handoff(api.credentials if api else None, timeout,
+                      authorize=authorize_session if api is None else None)
     from common.polling import DeadlineStop
-    stop = DeadlineStop(stop, handoff.deadline)
+    stop = DeadlineStop(stop, handoff.deadline, abort=lambda:
+                        handoff.ready.is_set() and not handoff.delivered
+                        and time.monotonic()-handoff.last_seen > 90)
     try:
         proxy = Proxy(lambda value: None, local_handler=handoff.handle)
     except OSError:
@@ -132,6 +136,14 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
             show('请在电脑微信打开以下一次性链接；页面就绪后才会下单，最终付款由你确认：')
             show(handoff.url)
             wait(handoff.ready)
+            if api is None:
+                api = core.Api(handoff.credentials)
+                show('微信登录态已验证并加密保存；当前页面将直接接收预约结果，无需再打开第二个链接。')
+                plan = prepare(api, journal, now)
+                if plan['notice_hash'] != approved_hash:
+                    raise core.BookingError('须知已变化，未下单，请重新阅读并确认。')
+                if not plan['direct_booking_allowed']:
+                    raise core.BookingError('账户需要在微信完成资格或手机号确认，未下单。')
             if await_release:
                 from .release_watch import watch_release
                 result = watch_release(api, approved_hash, cap_cents, journal, stop, show, release_days=release_days)

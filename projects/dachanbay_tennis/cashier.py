@@ -41,7 +41,7 @@ def check_frontend():
         conn.close()
 
 
-def page(nonce):
+def page(nonce, timeout=180):
     # No credential or signed payment parameters are embedded in HTML or URLs.
     script = r'''
 import {Z as cashier, aw as profile, A as user} from "__ASSET__";
@@ -52,12 +52,25 @@ document.body.append(banner);
 function status(text) { banner.textContent = text; }
 async function request(action, token) {
   return fetch(base + action, {method:"POST", cache:"no-store", credentials:"same-origin",
-    headers:{"spc-jwt-token":token}});
+    headers:{"spc-jwt-token":token,"spc-mp-openid":user().mpOpenId || ""}});
 }
 try {
-  const token = await profile().getJwt({autoRenew:false});
-  if (!token || !(await request("ready", token)).ok) throw Error();
-  status("微信已就绪，助手正在检查并提交预约。请保持本页打开。");
+  const deadline = Date.now() + __TIMEOUT__ * 1000;
+  let token = "", attempted = "";
+  while (Date.now() < deadline) {
+    try { token = await profile().getJwt({autoRenew:false}); } catch (_) { token = ""; }
+    if (token && token !== attempted) {
+      attempted = token;
+      const ready = await request("ready", token);
+      if (ready.ok) break;
+      if (ready.status === 410) throw Error();
+    }
+    status("请在微信完成官网登录授权，助手会自动继续。当前尚未下单。");
+    await new Promise(r=>setTimeout(r,1000));
+    token = "";
+  }
+  if (!token || Date.now() >= deadline) throw Error();
+  status("微信已就绪，助手将按设定时间检查并提交预约。请保持本页打开，最后付款由你确认。");
   let packet;
   for (let i=0; i<1800; i++) {
     const response = await request("claim", token);
@@ -86,7 +99,7 @@ try {
   }
 } catch (_) { status("收银台交接失败或已过期。请回助手查看结果，勿重复下单；需要时在微信核对或联系场馆。"); }
 '''
-    script = script.replace('__ASSET__', ASSET).replace('__NONCE__', nonce)
+    script = script.replace('__ASSET__', ASSET).replace('__NONCE__', nonce).replace('__TIMEOUT__',str(max(1,int(timeout))))
     return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>昀湾预约 · 本人付款</title></head><body><div id="app"></div>'
             '<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>'
@@ -94,10 +107,12 @@ try {
 
 
 class Handoff:
-    def __init__(self, credentials, timeout=180):
+    def __init__(self, credentials, timeout=180, authorize=None):
         self.nonce = secrets.token_urlsafe(24)
         self.credentials = credentials
+        self.authorize = authorize
         self.deadline = time.monotonic() + timeout
+        self.last_seen = time.monotonic()
         self.ready, self.launched = threading.Event(), threading.Event()
         self.lock = threading.Lock()
         self.packet = None
@@ -129,17 +144,32 @@ class Handoff:
         if entry:
             if method != 'GET' or parse_qs(url.query).get('book_ticket_handoff') != [self.nonce]:
                 return answer(404, {})
-            return 200, 'text/html; charset=utf-8', page(self.nonce)
+            return 200, 'text/html; charset=utf-8', page(self.nonce,self.deadline-time.monotonic())
         expected = prefix + self.nonce + '/'
         if not url.path.startswith(expected) or method != 'POST' or body:
             return answer(404, {})
         if headers.get('Origin') != f'http://{core.HOST}':
             return answer(403, {})
-        token = headers.get('spc-jwt-token', '')
-        if not hmac.compare_digest(token.encode(), self.credentials['token'].encode()):
-            return answer(403, {})
         action = url.path[len(expected):]
         with self.lock:
+            token = headers.get('spc-jwt-token', '').strip()
+            if not token:
+                return answer(403, {})
+            if self.credentials is None:
+                if action != 'ready' or self.authorize is None:
+                    return answer(403, {})
+                candidate = {'token':token, 'cookie':headers.get('Cookie',''),
+                             'user_agent':headers.get('User-Agent',''),
+                             'mp_openid':headers.get('spc-mp-openid','')}
+                try:
+                    self.authorize(candidate)  # Validate with the REAL user API first.
+                except Exception:
+                    return answer(403, {})
+                self.credentials = candidate
+            if not hmac.compare_digest(token.encode(), self.credentials['token'].encode()):
+                return answer(403, {})
+            if action in ('ready','claim','launched'):
+                self.last_seen = time.monotonic()
             if action == 'ready':
                 self.ready.set()
                 return answer(200, {})
@@ -157,13 +187,20 @@ class Handoff:
         return answer(404, {})
 
 
-def check_receiver(api, *, timeout=180, manual=False, service=None, show=print):
+def authorize_session(value):
+    core.Api(value).profile()
+    core.save_credentials(value)
+
+
+def check_receiver(api=None, *, timeout=180, manual=False, service=None, show=print):
     """Live browser/login handshake only. This function never calls a booking API."""
     from common.system_proxy import proxy_session
     from .capture_proxy import Proxy
-    api.profile()
+    if api is not None:
+        api.profile()
     check_frontend()
-    handoff = Handoff(api.credentials, timeout)
+    handoff = Handoff(api.credentials if api else None, timeout,
+                      authorize=authorize_session if api is None else None)
     try:
         proxy = Proxy(lambda value:None, local_handler=handoff.handle)
     except OSError:

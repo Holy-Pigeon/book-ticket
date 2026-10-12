@@ -2,6 +2,7 @@
 import datetime as dt
 import http.client
 import json
+import math
 import re
 import uuid
 from common.errors import LocalError as BookingError
@@ -152,7 +153,8 @@ def choices(grid, target):
             if (hhmm(slot.get("start_time")), hhmm(slot.get("end_time"))) != (start, end):
                 continue
             price = slot.get("price")
-            if isinstance(price, bool) or not isinstance(price, (int, float)) or price < 0:
+            if (isinstance(price, bool) or not isinstance(price, (int, float))
+                    or not math.isfinite(price) or price < 0 or price != int(price)):
                 raise BookingError("价格格式不符，已停止。")
             result.append({**slot, "ground_id": court["ground_id"],
                            "ground_name": court.get("ground_name", "网球场"), "date": date})
@@ -200,6 +202,8 @@ class Journal:
         if self.contains(target):
             raise BookingError("该目标已有下单尝试记录，不会再次提交。请核对微信订单。")
         self.records[self.key(target)] = {"state": "unknown", "ground_id": slot["ground_id"],
+                                          "ground_name": slot.get("ground_name", "网球场"),
+                                          "price_cents": slot.get("price"),
                                           "time": dt.datetime.now(TZ).isoformat()}
         write_json(self.path, self.records)
 
@@ -216,7 +220,7 @@ def validate_slot(grid, slot, cap_cents):
         raise BookingError("该时段要求腾讯验证码，请在微信完成预约；脚本不会绕过。")
     if "consumption_rule" not in slot or "duration_fee_type" not in slot:
         raise BookingError("预约条件字段不完整，已停止。")
-    if slot["price"] > cap_cents:
+    if cap_cents is not None and slot["price"] > cap_cents:
         raise BookingError("该时段价格超过你设置的单次上限。")
     fee = slot["duration_fee_type"]
     if fee == 3:
@@ -254,11 +258,11 @@ def submit(api, journal, type_id, target, slot, cap_cents, stop):
         raise BookingError("资格检查未明确通过，请在微信核对。")
     if stop.is_set():
         raise BookingError("已停止。")
-    journal.begin(target, slot)
+    journal.begin(target, matches[0])
     response = api.venue("PayBooking", {"scene": 2,
         "mp_openid": api.credentials.get("mp_openid", ""), "slots": slots,
         "confirm_booking_agreement": 2})
-    if not response.get("main_order_no") or "need_payment" not in response:
+    if not response.get("main_order_no") or not isinstance(response.get("need_payment"), bool):
         raise BookingError("已发出下单请求，结果不明确。请立即在微信核对订单，禁止重复提交。")
     journal.finish(target, response)
     return response

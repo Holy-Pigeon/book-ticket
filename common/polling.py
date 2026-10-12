@@ -1,5 +1,21 @@
 """Timing helpers. Call Event.wait(delay) after each serial response."""
 import math
+import time
+
+
+class DeadlineStop:
+    """Event-compatible stop view, including checks immediately before a POST."""
+    def __init__(self, event, deadline):
+        self.event, self.deadline = event, deadline
+
+    def is_set(self):
+        return self.event.is_set() or time.monotonic() >= self.deadline
+
+    def wait(self, seconds):
+        if self.is_set():
+            return True
+        self.event.wait(min(seconds, max(0, self.deadline-time.monotonic())))
+        return self.is_set()
 
 
 def backoff(attempt, base=5, ceiling=60):

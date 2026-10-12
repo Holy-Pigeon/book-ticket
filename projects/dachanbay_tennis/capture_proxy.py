@@ -71,6 +71,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(413)
                 return
             body = self.rfile.read(length) if length else None
+            if self.server.local_handler:
+                local = self.server.local_handler(self.command, url, self.headers, body or b'')
+                if local is not None:
+                    status, mime, payload = local
+                    self.send_response_only(status)
+                    self.send_header('Content-Type', mime)
+                    self.send_header('Content-Length', str(len(payload)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.send_header('Referrer-Policy', 'no-referrer')
+                    self.send_header('X-Content-Type-Options', 'nosniff')
+                    self.send_header('Connection', 'close')
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
             value = None
             target_request = url.hostname.lower() == HOST and (url.port or 80) == 80 and url.path.startswith("/api/")
             if target_request:
@@ -132,13 +146,21 @@ class Handler(BaseHTTPRequestHandler):
 
 class Proxy(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # POSIX reuse permits immediate restart after TIME_WAIT without sharing an
+    # active listener; Windows reuse can hijack a live listener, so use exclusive.
+    allow_reuse_address = not hasattr(socket, 'SO_EXCLUSIVEADDRUSE')
 
-    def __init__(self, callback, port=8766, on_exchange=None, on_tunnel=None):
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+    def __init__(self, callback, port=8766, on_exchange=None, on_tunnel=None, local_handler=None):
         super().__init__(("127.0.0.1", port), Handler)
         self.on_credentials = callback
         self.on_exchange = on_exchange
         self.on_tunnel = on_tunnel
+        self.local_handler = local_handler
         self.stopping = threading.Event()
         self.target_seen = 0
 

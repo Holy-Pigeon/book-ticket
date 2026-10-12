@@ -85,7 +85,13 @@ try {
     await request("launched", token);
   } else {
     user().setMpOpenid(packet.mp_openid || "");
-    status("正在调起官网收银台；付款请由本人确认。关闭收银台不会自动取消或重订。");
+    const booking = packet.booking;
+    const detail = booking ? `${booking.date} ${booking.start}–${booking.end}，${booking.ground_name}，¥${(booking.price_cents/100).toFixed(2)}。` : "";
+    status(detail + "预约接口已返回，请点击继续付款。最终金额以官网收银台为准。");
+    const button = document.createElement("button");
+    button.textContent = "继续付款";
+    button.style = "display:block;margin-top:16px;padding:12px 24px;font:20px sans-serif;cursor:pointer";
+    banner.append(button);
     const success = "/venue_success?main_order_no=" + encodeURIComponent(packet.response.main_order_no);
     const router = {push(value) {
       const target = typeof value === "string" ? value : value.path + "?" + new URLSearchParams(value.query || {});
@@ -93,9 +99,26 @@ try {
     }};
     // The real SDK owns payment confirmation and the success callback.
     // Omit its onClose callback, which the original booking page uses to cancel.
-    await cashier(packet.response, {route:{path:"/index",query:{}},router}, success, "/index");
-    await request("launched", token);
-    banner.remove();
+    // Invoke directly inside the user's click handler, preserving native user activation.
+    // Automatic polling never launches the payment SDK.
+    let started = false;
+    await new Promise((resolve,reject)=>{
+      button.onclick = async()=>{
+        if (started) return;
+        started = true;
+        button.disabled = true;
+        if (Date.now() >= deadline) {
+          status("付款交接已过期，请在微信核对这笔订单，勿重新下单。");
+          resolve(); return;
+        }
+        try {
+          status("正在调起官网收银台；付款请由本人确认。关闭收银台不会自动取消或重订。");
+          await cashier(packet.response, {route:{path:"/index",query:{}},router}, success, "/index");
+          await request("launched", token);
+          banner.remove(); resolve();
+        } catch (error) { reject(error); }
+      };
+    });
   }
 } catch (_) { status("收银台交接失败或已过期。请回助手查看结果，勿重复下单；需要时在微信核对或联系场馆。"); }
 '''
@@ -124,6 +147,10 @@ class Handoff:
             if self.delivered or self.packet is not None:
                 raise core.BookingError('已有收银台交接结果，禁止覆盖或重复下单。')
             self.packet = dict(response=result['response'], mp_openid=self.credentials.get('mp_openid', ''))
+            if result.get('target'):
+                date, start, end = result['target']
+                self.packet['booking'] = dict(date=date, start=start, end=end,
+                    ground_name=result['ground_name'], price_cents=result['price_cents'])
 
     def fail(self, message):
         with self.lock:

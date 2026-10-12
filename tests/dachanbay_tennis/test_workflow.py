@@ -30,6 +30,51 @@ class BookingApi(Fake):
 
 
 class WorkflowTests(unittest.TestCase):
+    @private_storage_test
+    def test_one_off_sunday_books_only_paid_hour_without_changing_weekly_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = core.Journal(Path(tmp)/'journal.dpapi')
+            api = BookingApi(journal)
+            sunday = '2026-10-18'
+            grid = deepcopy(GRID)
+            grid['items'][0]['booking_durations'] = [
+                {**SLOT,'start_time':'09:00','end_time':'10:00','price':0,'duration_fee_type':2},
+                {**SLOT,'start_time':'10:00','end_time':'12:00'},
+                {**SLOT,'start_time':'12:00','end_time':'13:00','status':2},
+                {**SLOT,'start_time':'15:00','end_time':'16:00'},
+            ]
+            weekly = deepcopy(core.TARGETS)
+            def venue(name, body):
+                api.calls.append((name, body))
+                if name == 'CheckIsViolation':
+                    return {'is_violation':False}
+                self.assertEqual(name,'PayBooking')
+                self.assertTrue(core.Journal(journal.path).contains((sunday,'15:00','16:00')))
+                return {'main_order_no':'synthetic-sunday','need_payment':True}
+            with patch.object(api,'dates',return_value=[{'date':TARGET[0]},{'date':sunday}]), \
+                 patch.object(api,'grid',return_value=grid) as grids, \
+                 patch.object(api,'venue',side_effect=venue):
+                result = workflow.reserve_one(api,workflow.notice_digest(api.notices('tennis')),None,
+                                              journal,now=NOW,booking_date=sunday,paid_only=True)
+            self.assertEqual(result['target'],(sunday,'15:00','16:00'))
+            self.assertTrue(all(call.args == ('tennis',sunday) for call in grids.call_args_list))
+            self.assertEqual(sum(name=='PayBooking' for name,body in api.calls),1)
+            self.assertEqual(core.TARGETS,weekly)
+
+    @private_storage_test
+    def test_one_off_closed_date_does_not_fall_back_to_weekly_or_submit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = core.Journal(Path(tmp)/'journal.dpapi')
+            api = BookingApi(journal)
+            with patch.object(api,'grid',side_effect=AssertionError('closed date has no grid')):
+                result = workflow.reserve_one(api,workflow.notice_digest(api.notices('tennis')),None,
+                                              journal,now=NOW,booking_date='2026-10-18',paid_only=True)
+            self.assertIsNone(result)
+            self.assertFalse(api.calls)
+            self.assertFalse(journal.records)
+        for value in ('2026-10-11','20261018','2026-99-18','not-a-date'):
+            with self.assertRaises(core.BookingError):workflow.one_off_date(value,NOW)
+
     def test_prices_and_untrusted_numeric_inputs(self):
         self.assertEqual(workflow.fee_cap('60.25'), 6025)
         for amount in ('NaN','Infinity','0','-1','60.001',True):
@@ -72,6 +117,21 @@ class WorkflowTests(unittest.TestCase):
                 with self.assertRaises(core.BookingError): workflow.reserve_one(api,approval,6000,journal,now=NOW)
             self.assertFalse(journal.records)
             self.assertEqual(api.calls,[])
+
+    @private_storage_test
+    def test_paid_only_rechecks_fee_type_before_creating_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = core.Journal(Path(tmp)/'journal.dpapi')
+            api = BookingApi(journal)
+            changed = deepcopy(GRID)
+            changed['items'][0]['booking_durations'][0]['duration_fee_type'] = 2
+            changed.update(free_min_booking_count=1,free_max_booking_count=2,society_free_exist_count=0)
+            with patch.object(api,'grid',return_value=changed):
+                with self.assertRaisesRegex(core.BookingError,'付费场次条件发生变化'):
+                    core.submit(api,journal,'tennis',TARGET,core.choices(GRID,TARGET)[0],None,
+                                threading.Event(),paid_only=True)
+            self.assertFalse(journal.records)
+            self.assertFalse(api.calls)
 
     @private_storage_test
     def test_unlimited_budget_and_fresh_price_in_receipt(self):
@@ -141,13 +201,18 @@ class HandoffTests(unittest.TestCase):
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 (async()=>{
-for (const mode of ['paid','free','wrong-session','renewed-session']) {
+for (const mode of ['paid','free','wrong-session','renewed-session','expired-click']) {
   const requests=[], calls=[], redirects=[];
   let tick=0,reads=0;
-  const paid=mode==='paid'||mode==='renewed-session';
+  const paid=['paid','renewed-session','expired-click'].includes(mode);
+  let button;
   const response={main_order_no:'synthetic-order',need_payment:paid,url_params:'synthetic-signed-value'};
   const context={console,URLSearchParams,Date:class extends Date {static now(){return tick}},
-    setTimeout(fn,delay){tick+=delay;fn()},document:{body:{append(){}},createElement(){return {remove(){}}}},
+    setTimeout(fn,delay){tick+=delay;fn()},document:{body:{append(){}},createElement(tag){
+      const element={remove(){},append(){}};
+      if(tag==='button')button=element;
+      return element;
+    }},
     window:{location:{assign(p){redirects.push(p)}}},
     fetch:async(url,options)=>{
       requests.push(url.split('/').pop());
@@ -159,11 +224,21 @@ for (const mode of ['paid','free','wrong-session','renewed-session']) {
     sdk:{profile:()=>({getJwt:async(options)=>{assert.equal(options.autoRenew,false);reads++;return mode==='renewed-session'&&reads===1?'synthetic-expired':'synthetic-jwt'}}),
       user:()=>({setMpOpenid(value){assert.equal(value,'')}}),
       cashier:async(...args)=>{calls.push(args);assert.equal(args[0],response);assert.equal(args.length,4)}}};
-  await new vm.Script('(async()=>{'+SOURCE+'})()').runInNewContext(context);
-  assert.equal(calls.length,paid?1:0);
-  assert.deepEqual(requests,mode==='wrong-session'?['ready']:mode==='renewed-session'?['ready','ready','claim','launched']:['ready','claim','launched']);
+  const task=new vm.Script('(async()=>{'+SOURCE+'})()').runInNewContext(context);
+  if(paid){
+    for(let i=0;i<30&&!button?.onclick;i++)await Promise.resolve();
+    assert.ok(button?.onclick);
+    assert.equal(calls.length,0); // No SDK call until the user chooses to pay.
+    assert.equal(requests.includes('launched'),false);
+    if(mode==='expired-click')tick=181000;
+    await button.onclick();
+    await button.onclick(); // Repeated clicks must not replay the payment.
+  }
+  await task;
+  assert.equal(calls.length,paid&&mode!=='expired-click'?1:0);
+  assert.deepEqual(requests,mode==='wrong-session'?['ready']:mode==='expired-click'?['ready','claim']:mode==='renewed-session'?['ready','ready','claim','launched']:['ready','claim','launched']);
   assert.equal(redirects.length,0); // Only a REAL SDK success callback may redirect.
-  if (paid) {
+  if (paid&&mode!=='expired-click') {
     calls[0][1].router.push({path:'/venue_success',query:{main_order_no:'synthetic-order'}});
     assert.equal(redirects[0],'/venue_success?main_order_no=synthetic-order');
   }

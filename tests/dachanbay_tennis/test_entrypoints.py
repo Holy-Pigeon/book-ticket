@@ -45,3 +45,15 @@ class EntryPoints(unittest.TestCase):
             self.assertEqual(book.call_args.args[1:],('synthetic-hash',None))
             self.assertTrue(book.call_args.kwargs['manual'])
             self.assertFalse(book.call_args.kwargs['await_release'])
+            self.assertIsNone(book.call_args.args[0])
+
+    def test_one_off_booking_uses_fresh_login_and_preserves_date_filter(self):
+        from common.concurrency import SingleInstance
+        with patch.object(SingleInstance,'__enter__'), patch.object(SingleInstance,'__exit__'), \
+             patch('projects.dachanbay_tennis.workflow.one_off_date'), \
+             patch('projects.dachanbay_tennis.core.load_credentials',side_effect=AssertionError('use fresh login')), \
+             patch('projects.dachanbay_tennis.workflow.book_with_cashier') as book:
+            main(['book','--date','2026-10-18','--paid-only','--approve-notice','synthetic-hash','--unlimited-price'])
+        self.assertIsNone(book.call_args.args[0])
+        self.assertEqual(book.call_args.kwargs['booking_date'],'2026-10-18')
+        self.assertTrue(book.call_args.kwargs['paid_only'])

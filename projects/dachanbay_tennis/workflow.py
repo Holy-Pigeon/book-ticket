@@ -1,5 +1,6 @@
 """Headless preparation and a single booking, ending at a human payment handoff."""
 from decimal import Decimal, InvalidOperation
+import datetime as dt
 import hashlib
 import threading
 import time
@@ -21,7 +22,23 @@ def notice_digest(notices):
     return hashlib.sha256(notices.encode('utf-8')).hexdigest()
 
 
-def prepare(api, journal=None, now=None):
+def one_off_date(value, now=None):
+    now = now or dt.datetime.now(core.TZ)
+    try:
+        day = dt.date.fromisoformat(value)
+        if day.isoformat() != value or day < now.date():
+            raise ValueError()
+    except (TypeError, ValueError):
+        raise core.BookingError('单次预约日期须为今天或未来的 YYYY-MM-DD。') from None
+    return day
+
+
+def prepare(api, journal=None, now=None, *, booking_date=None, paid_only=False):
+    now = now or dt.datetime.now(core.TZ)
+    if paid_only and booking_date is None:
+        raise core.BookingError('仅付费场次筛选须配合单次预约日期。')
+    if booking_date is not None:
+        one_off_date(booking_date, now)
     profile = api.profile()
     court = api.tennis()
     type_id = court['ground_type_id']
@@ -29,9 +46,32 @@ def prepare(api, journal=None, now=None):
     orders = api.orders()
     journal = journal or core.Journal()
     options = []
-    for target in core.target_dates(api.dates(type_id), now):
-        grid = api.grid(type_id, target[0])
+    dates = api.dates(type_id)
+    grids = {}
+    if booking_date is None:
+        targets = core.target_dates(dates, now)
+    else:
+        targets = set()
+        if any(item.get('date') == booking_date for item in dates):
+            grid = grids[booking_date] = api.grid(type_id, booking_date)
+            for court in grid['items']:
+                for slot in core.require_list(court, 'booking_durations'):
+                    start, end = core.hhmm(slot.get('start_time')), core.hhmm(slot.get('end_time'))
+                    try:
+                        a = dt.datetime.fromisoformat(booking_date + ' ' + start).replace(tzinfo=core.TZ)
+                        b = dt.datetime.fromisoformat(booking_date + ' ' + end).replace(tzinfo=core.TZ)
+                    except ValueError:
+                        raise core.BookingError('预约时段格式不符，已停止。') from None
+                    if a > now and b-a == dt.timedelta(hours=1):
+                        targets.add((booking_date, start, end))
+        targets = sorted(targets)
+    for target in targets:
+        if target[0] not in grids:
+            grids[target[0]] = api.grid(type_id, target[0])
+        grid = grids[target[0]]
         for slot in core.choices(grid, target):
+            if paid_only and (slot.get('duration_fee_type') != 3 or slot['price'] <= 0):
+                continue
             reason = None
             if journal.contains(target):
                 reason = '已有本机下单尝试，需核对订单'
@@ -47,12 +87,13 @@ def prepare(api, journal=None, now=None):
                 direct_booking_allowed=profile.get('require_verification') == 1, options=options)
 
 
-def reserve_one(api, approved_hash, cap_cents, journal=None, stop=None, now=None, candidates=None):
+def reserve_one(api, approved_hash, cap_cents, journal=None, stop=None, now=None, candidates=None,
+                *, booking_date=None, paid_only=False):
     if cap_cents is not None and (not isinstance(cap_cents, int) or isinstance(cap_cents, bool) or cap_cents <= 0):
         raise core.BookingError('请先明确单次价格上限。')
     journal = journal or core.Journal()
     stop = stop or threading.Event()
-    plan = prepare(api, journal, now)
+    plan = prepare(api, journal, now, booking_date=booking_date, paid_only=paid_only)
     if not approved_hash or plan['notice_hash'] != approved_hash:
         raise core.BookingError('须知未确认或已变化，请先查看当前须知再确认。')
     if not plan['direct_booking_allowed']:
@@ -70,7 +111,7 @@ def reserve_one(api, approved_hash, cap_cents, journal=None, stop=None, now=None
     if notice_digest(api.notices(plan['type_id'])) != approved_hash:
         raise core.BookingError('提交前须知发生变化，未下单。')
     response = core.submit(api, journal, plan['type_id'], selected['target'],
-                           selected['slot'], cap_cents, stop)
+                           selected['slot'], cap_cents, stop, paid_only=paid_only)
     record = journal.records[journal.key(selected['target'])]
     return dict(target=selected['target'], ground_name=record.get('ground_name', '网球场'),
                 price_cents=record.get('price_cents'), main_order_no=response['main_order_no'],
@@ -91,13 +132,20 @@ def describe(plan, show=print):
 
 def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
                       manual=False, service=None, show=print, restored=None,
-                      timeout=180, now=None, await_release=False, release_days=7):
+                      timeout=180, now=None, await_release=False, release_days=7,
+                      booking_date=None, paid_only=False):
     """Caller owns SingleInstance. Verify the receiving browser BEFORE the POST."""
     from common.system_proxy import proxy_session
     from .capture_proxy import Proxy
     from .cashier import Handoff, authorize_session, check_frontend
     journal = journal or core.Journal()
     stop = stop or threading.Event()
+    if booking_date is not None:
+        one_off_date(booking_date, now)
+        if await_release:
+            raise core.BookingError('单次预约日期不能与放号守候同时使用。')
+    if paid_only and booking_date is None:
+        raise core.BookingError('仅付费场次筛选须配合单次预约日期。')
     if await_release:
         import datetime as dt
         from .release_watch import window
@@ -106,7 +154,7 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
             show(f'本次新放号日期 {release_date} 不在目标周二/周三，不查询或下单。')
             return None
     if api is not None:
-        plan = prepare(api, journal, now)
+        plan = prepare(api, journal, now, booking_date=booking_date, paid_only=paid_only)
         if plan['notice_hash'] != approved_hash:
             raise core.BookingError('须知未确认或已变化，未下单。')
         if not await_release and not any(not x['blocked'] and (cap_cents is None or x['slot']['price'] <= cap_cents) for x in plan['options']):
@@ -139,7 +187,7 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
             if api is None:
                 api = core.Api(handoff.credentials)
                 show('微信登录态已验证并加密保存；当前页面将直接接收预约结果，无需再打开第二个链接。')
-                plan = prepare(api, journal, now)
+                plan = prepare(api, journal, now, booking_date=booking_date, paid_only=paid_only)
                 if plan['notice_hash'] != approved_hash:
                     raise core.BookingError('须知已变化，未下单，请重新阅读并确认。')
                 if not plan['direct_booking_allowed']:
@@ -148,7 +196,10 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
                 from .release_watch import watch_release
                 result = watch_release(api, approved_hash, cap_cents, journal, stop, show, release_days=release_days)
             else:
-                result = reserve_one(api, approved_hash, cap_cents, journal, stop, now)
+                if booking_date:
+                    show(f'本次仅预约 {booking_date} 的一个可用一小时场次；不会修改每周目标。')
+                result = reserve_one(api, approved_hash, cap_cents, journal, stop, now,
+                                     booking_date=booking_date, paid_only=paid_only)
             if result is None:
                 handoff.fail('余量或条件发生变化，没有下单。请返回助手。')
                 show('余量或条件发生变化，没有下单。')
@@ -158,6 +209,8 @@ def book_with_cashier(api, approved_hash, cap_cents, *, journal=None, stop=None,
             show(f"已收到预约响应：{' '.join(result['target'])}，{result['ground_name']}，¥{result['price_cents']/100:.2f}。")
             show('主订单号：' + str(result['main_order_no']) + '。不会再次提交这个目标。')
             handoff.publish(result)
+            show('请在助手页面核对场次并点击“继续付款”，随后由你在官网收银台确认。'
+                 if result['need_payment'] else '请在微信页面核对免支付预约结果。')
             wait(handoff.launched)
             record = journal.records[journal.key(result['target'])]
             record['cashier_state'] = 'sdk_requested' if result['need_payment'] else 'no_payment_required'

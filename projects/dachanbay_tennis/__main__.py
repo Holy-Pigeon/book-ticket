@@ -18,8 +18,15 @@ def main(argv=None):
     parser.add_argument('--network-service', help='macOS 当前网络服务名，例如 Wi-Fi')
     parser.add_argument('--timeout', type=int, default=180, help='登录或收银台准备时限，秒')
     parser.add_argument('--release-days', type=int, default=7, help='20:00 新放号日期与当天相差的天数，默认 7')
+    parser.add_argument('--date', help='plan/book 单次预约日期 YYYY-MM-DD，不修改每周守候目标')
+    parser.add_argument('--paid-only', action='store_true', help='单次预约只选非零价格的付费一小时场次')
     args = parser.parse_args(argv)
     try:
+        if args.date is not None or args.paid_only:
+            if args.command not in ('plan', 'book') or not args.date:
+                parser.error('--date/--paid-only 只用于 plan/book，且必须指定 --date')
+            from .workflow import one_off_date
+            one_off_date(args.date)
         if args.command in ('book', 'release', 'daily'):
             if not args.approve_notice or (args.max_price is None and not args.unlimited_price):
                 parser.error('下单需 --approve-notice 以及 --max-price 或 --unlimited-price')
@@ -77,15 +84,16 @@ def main(argv=None):
                     check_receiver(timeout=args.timeout, manual=args.manual_proxy,
                                    service=args.network_service, show=lambda s:print(s,flush=True))
                 else:
-                    api = Api(load_credentials())
+                    api = None if args.command == 'book' else Api(load_credentials())
                     if args.command == 'plan':
-                        describe(prepare(api))
+                        describe(prepare(api, booking_date=args.date, paid_only=args.paid_only))
                     else:
                         cap = None if args.unlimited_price else fee_cap(args.max_price)
                         book_with_cashier(api, args.approve_notice, cap, manual=args.manual_proxy,
                                           service=args.network_service, timeout=args.timeout,
                                           show=lambda s: print(s, flush=True), await_release=args.command == 'release',
-                                          release_days=args.release_days)
+                                          release_days=args.release_days, booking_date=args.date,
+                                          paid_only=args.paid_only)
             return
         run()
     except LocalError as e:

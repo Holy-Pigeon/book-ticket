@@ -238,7 +238,7 @@ def validate_slot(grid, slot, cap_cents):
         raise BookingError("单小时预约不符合服务器返回的数量限制。")
 
 
-def submit(api, journal, type_id, target, slot, cap_cents, stop):
+def submit(api, journal, type_id, target, slot, cap_cents, stop, *, paid_only=False):
     if stop.is_set():
         raise BookingError("已停止。")
     if api.profile().get("require_verification") != 1:
@@ -250,6 +250,8 @@ def submit(api, journal, type_id, target, slot, cap_cents, stop):
     if len(matches) != 1:
         raise BookingError("余量发生变化，已停止。")
     validate_slot(fresh, matches[0], cap_cents)
+    if paid_only and (matches[0]['duration_fee_type'] != 3 or matches[0]['price'] <= 0):
+        raise BookingError('付费场次条件发生变化，未下单。')
     date, start, end = target
     slots = [{"ground_id": slot["ground_id"], "start_time": f"{date} {start}:00",
               "end_time": f"{date} {end}:00"}]
